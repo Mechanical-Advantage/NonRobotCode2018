@@ -2,7 +2,7 @@
 #define DATA_MASK 0x3f // Should have data bits set, others 0, must match SET_BITS
 
 byte ledPins[] = {
-  9, 8, 10, 7, 11, A0, A1, 12
+  2, 3, 4, 6, 5, 7, 8, 9, 10, 11, 12, A5, A4, A3, A2, A1, A0
 };       // an array of pin numbers to which LEDs are attached
 
 void setup() {
