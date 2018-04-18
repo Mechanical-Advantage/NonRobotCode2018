@@ -2,21 +2,39 @@
 from time import sleep
 
 from networktables import NetworkTables
-from serial import Serial
+from serial import Serial, SerialException
 
 NTSERVER = "127.0.0.1"
-SERIAL_PORT = "/dev/cu.usbmodem241141"
+SERIAL_PORT = "/dev/cu.usbmodem26231"
 SET_BITS = 2
 
 last_value = []
+arduino_connected = False
 
-# serial port setup
-arduino = Serial(SERIAL_PORT, 9600)
-# opening connection causes Arduino to reset and not recive data for a few seconds
-sleep(2)
-
+def connect_to_arduino():
+    # serial port setup
+    try:
+        global arduino
+        arduino = Serial(SERIAL_PORT, 9600)
+        # opening connection causes Arduino to reset and not recive data for a few seconds
+        sleep(2)
+        global arduino_connected
+        arduino_connected = True
+        print("Connected to Arduino")
+        global last_value
+        last_value = [] # Force resend of all LEDs
+        global table
+        try:
+            update_values(table, "OI LEDs", table.getBooleanArray("OI LEDs"), False)
+        except NameError:
+            # Before NT init
+            pass
+    except SerialException:
+        pass
+        
 def update_values(table, key, value, isNew):
     global last_value
+    global arduino_connected
     diff = [] # Will have true if the bit changed
     serial_data = []
     if len(last_value) < len(value):
@@ -35,7 +53,17 @@ def update_values(table, key, value, isNew):
             serial_data.append(int(data_string, base=2)+byte_index)
             print(index, data_string, sep=", ")
     last_value = value
-    arduino.write(bytes(serial_data))
+    try:
+        arduino.write(bytes(serial_data))
+    except SerialException:
+        if arduino_connected:
+            arduino_connected = False
+            print("Lost connection to Arduino")
+    except NameError:
+        # Arduino has not been connected to
+        pass
+
+connect_to_arduino()
 
 # NetworkTables setup
 NetworkTables.initialize(server=NTSERVER)
@@ -48,12 +76,14 @@ print("Connected to NetworkTables")
 table.addTableListener(update_values, immediateNotify=True, key="OI LEDs")
 
 lastStateConnected = True
-# main thread not needed anymore
 while True:
-    sleep(5)
+    sleep(2)
     if not lastStateConnected and NetworkTables.getRemoteAddress() is not None:
         lastStateConnected = True
         print("Re-connected to NetworkTables")
     elif lastStateConnected and NetworkTables.getRemoteAddress() is None:
         lastStateConnected = False
         print("Lost connection to NetworkTables")
+
+    if not arduino_connected:
+        connect_to_arduino();
